@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+    <head>
+		<title>Export to Excel</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<script src='https://code.jquery.com/jquery-2.2.4.min.js'></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/alasql/0.2.7/alasql.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.7.12/xlsx.core.min.js"></script>
+		<script type="text/javascript">
+			var dashboardname;
+			var exportData;
+			var sheetNames;
+			var doneSheets;
+			var sheets;
+			
+			function getCurrentViz() {
+				return parent.parent.tableau.VizManager.getVizs()[0];
+			};
+			
+			function exportToExcel(){
+				dashboardname = '';
+				exportData = [];
+				sheetNames = [];
+				doneSheets = 0;
+				sheets = [];
+				
+				var viz = getCurrentViz();
+				workbook = viz.getWorkbook();
+				
+				dashboardname = workbook.getActiveSheet().getName()
+				sheets = workbook.getActiveSheet().getWorksheets()
+				
+				options = {
+					maxRows: 0, 
+					ignoreSelection: true,
+					includeAllColumns: false
+				};
+				
+				for (var i = 0; i < sheets.length; i++) {
+					sheetName = sheets[i].getName()
+					sheetNames.push({sheetid:sheetName, header:true})
+					sheets[i].getSummaryDataAsync(options).then(function(t) {
+						var niceData = buildData(t);
+						exportData.push(niceData);
+						doneSheets++;
+						writeToFile();
+					});
+				}
+			}
+			
+			function buildData(table) {
+				var columns = table.getColumns();
+				var data = table.getData();
+				
+				function reduceToObjects(cols, data) {
+					var fieldNameMap = $.map(cols, function(col) {
+						return col.getFieldName()
+					});
+					var dataToReturn = $.map(data, function(d) {
+						return d.reduce(function(memo, value, idx) {
+							memo[fieldNameMap[idx]] = value.value;
+							return memo;
+						}, {});
+					});
+					return dataToReturn;
+				}
+				
+				var niceData = reduceToObjects(columns, data);
+				return (niceData)
+			}
+			
+			function writeToFile() {
+				if (doneSheets == sheets.length) {
+					var sql = 'SELECT INTO XLSX("' + dashboardname + '.xlsx",?) FROM ?';
+					var res = alasql(sql, [sheetNames, exportData]);
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<a class="btn icon-btn btn-default" href="#" onClick = "exportToExcel()">
+			<span class="glyphicon btn-glyphicon glyphicon-save img-circle text-muted"></span>
+			Export to Excel
+		</a>
+	</body>
+</html>
